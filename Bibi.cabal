@@ -1,0 +1,24 @@
+Name:		Bibi
+Version: 	0.1
+Synopsis:	A library to manipulate bibliography items used in TeX'
+Description: 	A library to manipulate bibliography items used in TeX'
+Category:	Text
+Maintainer:	Pierre-Etienne Meunier <pierreetienne.meunier@gmail.com>
+License:	GPL
+License-file:	LICENSE
+Build-Type:	Simple
+Cabal-Version:	>=1.2
+source-repository this
+        type: darcs
+        location: http://www.lama.univ-savoie.fr/~meunier/darcs/bibi
+Library
+        Build-Depends:base, containers, split, HDBC, HDBC-sqlite3, parsec
+        Exposed-Modules:Text.Bibi
+Executable bibi
+        Main-is:Bibi.hs
+        Build-Depends:directory,filepath
+        Hs-source-dirs:bibi,.
+Executable biberon
+        Main-is:Biberon.hs
+        Build-Depends:directory,filepath,blaze-html, pretty,bytestring,mtl,happstack-server
+        Hs-source-dirs:bibi,.
