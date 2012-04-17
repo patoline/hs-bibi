@@ -180,288 +180,67 @@ fillTextFields db ii defs ((x,y):s)=
       run db ("UPDATE bibliography SET "++y++"=? WHERE id=?") [toSql a, toSql ii]
       fillTextFields db ii defs s
 
-{- article -}
-insertDB db cross key ("article",defs)=do
-  case (M.lookup "author" defs, M.lookup "title" defs,
-        M.lookup "journal" defs, M.lookup "year" defs) of
 
-    (Just a,Just b,Just c,Just d)->do
-      let authors=map (intercalate " ".words) $ splitOn "and" a
-      journal<-byName db "journals" c
-      verif<-quickQuery' db "SELECT * FROM bibliography WHERE type=? AND title=? AND journal=? AND date=?"
-        [toSql "article",toSql b, toSql journal, toSql d]
-      if null verif then do
-        run db "INSERT INTO bibliography(type, title, journal, date) VALUES (?,?,?,?)"
-          [toSql "article",toSql b, toSql journal, toSql d]
-        artID_<-quickQuery' db "SELECT last_insert_rowid()" []
-        case artID_ of
-          (h:_):_->do
-            let artID=fromSql h::Int
-            run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
-            mapM_ (\(x,y)->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO authors_publications (author, article,ordre) VALUES (?,?,?)"
-                      [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
+insertDB db cross key (bibtype,defs)=do
+  case (M.lookup "title" defs) of
+    (Just a)->do
+      verif<-quickQuery' db "SELECT id FROM bibliography WHERE type=? AND title=?"
+        [toSql bibtype,toSql a]
+      artID_<-case verif of
+        (h:_):_->return $ Just h
+        _->do
+          run db "INSERT INTO bibliography(type, title) VALUES (?,?)" [toSql bibtype,toSql a]
+          artID_<-quickQuery' db "SELECT last_insert_rowid()" []
+          case artID_ of
+            (h:_):_->return $ Just h
+            _->return Nothing
+      case artID_ of
+        Nothing->do
+          hPutStrLn stderr $ "Could not process entry "++key
+          rollback db
+          return cross
+        Just artID_sql->do
+          let artID=fromSql artID_sql::Int
+          let authors=case M.lookup "author" defs of
+                Nothing->[]
+                Just a->map (intercalate " ".words) $ splitOn "and" a
+          run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
+          mapM_ (\(x,y)->do {
+                    auth<-byName db "authors" x;
+                    run db "INSERT INTO authors_publications (author, article,ordre) VALUES (?,?,?)"
+                    [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
 
-            fillTextFields db h defs [("volume","volume"),("number","number"),("pages","pages"),("doi","doi")]
-            commit db
-            return $ M.insert key h cross
-          _->do { rollback db; return cross }
-        else do
-        --putStrLn $ show key++" already in the base, please delete first"
-        return cross
+          let editors=case M.lookup "editor" defs of
+                Nothing->[]
+                Just a->map (intercalate " ".words) $ splitOn "and" a
+          run db "DELETE FROM editors_publications WHERE article=?" [toSql artID]
+          mapM_ (\(x,y)->do {
+                    auth<-byName db "authors" x;
+                    run db "INSERT INTO editors_publications (author,article,ordre) VALUES (?,?,?)"
+                    [toSql auth, toSql artID, toSql (y::Int)]}) $ zip editors [0..]
+
+          fillTextFields db artID defs [("volume","volume"),("number","number"),("pages","pages"),
+                                        ("doi","doi"),("chapter","chapter")]
+          case M.lookup "journal" defs of
+            Nothing -> return ()
+            Just c->do
+              journal<-byName db "journals" c
+              run db "UPDATE bibliography SET journal=? WHERE id=?" [toSql c, toSql artID]
+              return ()
+          case M.lookup "school" defs of
+            Nothing->return ()
+            Just c->do
+              school<-institutionid db "school" c
+              run db "UPDATE bibliography SET school=? WHERE id=?" [toSql c, toSql artID]
+              return ()
+          case M.lookup "organization" defs of
+            Nothing -> return ()
+            Just org->do
+              org<-byName db "organizations" org
+              run db ("UPDATE bibliography SET organization=? WHERE id=?") [toSql org, toSql artID]
+              return ()
+          commit db
+          return $ M.insert key artID cross
     _->do
-      putStrLn "incomplete doc, not added"
-      print (key,defs);
+      hPutStrLn stderr $ "incomplete doc, not added. key : "++key
       return cross
-
-
-{- webpage -}
-insertDB db cross key ("webpage",defs)=do
-  case (M.lookup "author" defs, M.lookup "title" defs, M.lookup "url" defs) of
-    (Just a,Just b,Just c)->do
-      let authors=map (intercalate " ".words) $ splitOn "and" a
-      verif<-quickQuery' db "SELECT * FROM bibliography WHERE type=? AND title=? AND date=?"
-        [toSql "webpage",toSql b, toSql c]
-      if null verif then do
-        run db "INSERT INTO bibliography(type, title, date) VALUES (?,?,?)"
-          [toSql "webpage",toSql b, toSql c]
-        artID_<-quickQuery' db "SELECT last_insert_rowid()" []
-        case artID_ of
-          (h:_):_->do
-            let artID=fromSql h::Int
-            run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
-            mapM_ (\(x,y)->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO authors_publications (author, article,ordre) VALUES (?,?,?)"
-                      [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
-
-            commit db
-            return $ M.insert key h cross
-          _->do { rollback db; return cross }
-        else do
-        --putStrLn $ show key++" already in the base, please delete first"
-        return cross
-    _->do
-      putStrLn "incomplete doc, not added"
-      print (key,defs);
-      return cross
-
-{- inproceedings -}
-insertDB db cross key ("inproceedings",defs)=do
-  let crossref=do
-        x<-M.lookup "crossref" defs
-        M.lookup x cross
-  case (M.lookup "author" defs, M.lookup "title" defs,
-        crossref, M.lookup "year" defs) of
-
-    (Just a,Just b,Just c,Just d)->do
-      let authors=map (intercalate " ".words) $ splitOn "and" a
-      verif<-quickQuery' db "SELECT * FROM bibliography WHERE type=? AND title=? AND crossref=? AND date=?"
-             [toSql "inproceedings",toSql b, toSql c, toSql d]
-      if null verif then do
-        run db "INSERT INTO bibliography(type, title, crossref, date) VALUES (?,?,?,?)"
-          [toSql "inproceedings",toSql b, toSql c, toSql d]
-        artID_<-quickQuery' db "SELECT last_insert_rowid()" []
-        case artID_ of
-          (h:_):_->do
-            let artID=fromSql h::Int
-            run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
-            mapM_ (\(x,y)->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO authors_publications (author, article,ordre) VALUES (?,?,?)"
-                      [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
-            fillTextFields db h defs [("pages","pages"),("doi","doi")]
-            commit db
-            return $ M.insert key h cross
-          _->do { rollback db; return cross }
-        else do
-        --putStrLn $ show key++" already in the base, please delete first"
-        return cross
-    _->do
-      putStrLn "incomplete doc, not added"
-      print (key,defs)
-      return cross
-
-{- inbook -}
-insertDB db cross key ("inbook",defs)=do
-  let crossref=do
-        x<-M.lookup "crossref" defs
-        M.lookup x cross
-      position=case M.lookup "pages" defs of
-        Nothing->M.lookup "chapter" defs
-        x->x
-  case (M.lookup "author" defs, M.lookup "title" defs,
-        crossref, M.lookup "year" defs,position) of
-
-    (Just a,Just b,Just _,Just d,Just e)->do
-      let authors=map (intercalate " ".words) $ splitOn "and" a
-
-      verif<-quickQuery' db "SELECT * FROM bibliography WHERE type=? AND title=? AND crossref=? AND date=?"
-             [toSql "inbook",toSql b, toSql crossref, toSql d]
-      if null verif then do
-        run db "INSERT INTO bibliography(type, title, crossref, date) VALUES (?,?,?,?)"
-          [toSql "inbook",toSql b, toSql crossref, toSql d]
-        artID_<-quickQuery' db "SELECT last_insert_rowid()" []
-        case artID_ of
-          (h:_):_->do
-            let artID=fromSql h::Int
-            run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
-            mapM_ (\(x,y)->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO authors_publications (author, article,ordre) VALUES (?,?,?)"
-                      [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
-            fillTextFields db h defs [("pages","pages"),("chapter","chapter"),("doi","doi")]
-            commit db
-            return $ M.insert key h cross
-          _->do { rollback db; return cross }
-        else do
-        --putStrLn $ show key++" already in the base, please delete first"
-        return cross
-    _->do
-      putStrLn "incomplete doc, not added"
-      print (key,defs)
-      return cross
-
-{- book -}
-insertDB db cross key ("book",defs)=
-  let aut=case M.lookup "author" defs of { Nothing->M.lookup "editor" defs; a->a } in
-  case (aut, M.lookup "title" defs, M.lookup "publisher" defs, M.lookup "year" defs) of
-
-    (Just a,Just b,Just c,Just d)->do
-      let authors=case M.lookup "author" defs of
-            Nothing->[]
-            Just aa->map (intercalate " ".words) $ splitOn "and" aa
-          editors=case M.lookup "editor" defs of
-            Nothing->[]
-            Just aa->map (intercalate " ".words) $ splitOn "and" aa
-      publisher_<-publisherid db c (M.lookup "address" defs)
-      verif<-quickQuery' db "SELECT * FROM bibliography WHERE type=? AND title=? AND publisher=? AND date=?"
-        [toSql "book",toSql b, toSql publisher_, toSql d]
-      if null verif then do
-        run db "INSERT INTO bibliography(type, title, publisher, date) VALUES (?,?,?,?)"
-          [toSql "book",toSql b, toSql publisher_, toSql d]
-        artID_<-quickQuery' db "SELECT last_insert_rowid()" []
-        case artID_ of
-          (h:_):_->do
-            let artID=fromSql h::Int
-            run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
-            mapM_ (\(x,y)->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO authors_publications (author,article,ordre) VALUES (?,?,?)"
-                      [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
-            run db "DELETE FROM editors_publications WHERE article=?" [toSql artID]
-            mapM_ (\(x,y)->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO editors_publications (author,article,ordre) VALUES (?,?,?)"
-                      [toSql auth, toSql artID, toSql (y::Int)]}) $ zip editors [0..]
-
-            fillTextFields db h defs [("volume","volume"),("number","number"),("series","series"),("isbn","isbn"),("doi","doi")]
-            commit db
-            return $ M.insert key h cross
-          _->do { rollback db; return cross }
-        else do
-        --putStrLn $ show key++" already in the base, please delete first"
-        return cross
-    _->do
-      putStrLn "incomplete doc, not added"
-      print (key,defs)
-      return cross
-
-
-
-
-{- phdthesis -}
-insertDB db cross key ("phdthesis",defs)=
-  case (M.lookup "author" defs, M.lookup "title" defs, M.lookup "school" defs, M.lookup "year" defs) of
-
-    (Just a,Just b,Just c,Just d)->do
-      let authors=case M.lookup "author" defs of
-            Nothing->[]
-            Just aa->map (intercalate " ".words) $ splitOn "and" aa
-      school<-institutionid db "school" c
-      verif<-quickQuery' db "SELECT * FROM bibliography WHERE type=? AND title=? AND school=? AND date=?"
-        [toSql "book",toSql b, toSql school, toSql d]
-      if null verif then do
-        run db "INSERT INTO bibliography(type, title, school, date) VALUES (?,?,?,?)"
-          [toSql "book",toSql b, toSql school, toSql d]
-        artID_<-quickQuery' db "SELECT last_insert_rowid()" []
-        case artID_ of
-          (h:_):_->do
-            let artID=fromSql h::Int
-            run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
-            mapM_ (\(x,y)->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO authors_publications (author,article,ordre) VALUES (?,?,?)"
-                      [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
-
-            fillTextFields db h defs [("doi","doi")]
-            commit db
-            return $ M.insert key h cross
-          _->do { rollback db; return cross }
-        else do
-        --putStrLn $ show key++" already in the base, please delete first"
-        return cross
-    _->do
-      putStrLn "incomplete doc, not added"
-      print (key,defs)
-      return cross
-
-
-
-
-{- proceedings -}
-insertDB db cross key ("proceedings",defs)=
-
-  case (M.lookup "title" defs, M.lookup "year" defs) of
-
-    (Just a,Just b)->do
-      let editors=case M.lookup "editor" defs of
-            Nothing->[]
-            Just aa->map (intercalate " ".words) $ splitOn "and" aa
-
-      verif<-quickQuery' db "SELECT * FROM bibliography WHERE type=? AND title=? AND date=?"
-             [toSql "proceedings",toSql a, toSql b]
-      if null verif then do
-        run db "INSERT INTO bibliography(type, title, date) VALUES (?,?,?)"
-          [toSql "proceedings",toSql a, toSql b]
-        artID_<-quickQuery' db "SELECT last_insert_rowid()" []
-        case artID_ of
-          (h:_):_->do
-            let artID=fromSql h::Int
-            run db "DELETE FROM editors_publications WHERE article=?" [toSql artID]
-            -- authors
-            mapM_ (\x->do {
-                      auth<-byName db "authors" x;
-                      run db "INSERT INTO editors_publications (author,article) VALUES (?,?)"
-                      [toSql auth, toSql artID]}) editors
-            -- text fields
-            fillTextFields db h defs [("volume","volume"),("number","number"),("series","series"),("doi","doi")]
-            -- publisher
-            case (M.lookup "publisher" defs) of
-              Nothing->return ()
-              Just pub->do
-                publisher_<-publisherid db pub (M.lookup "address" defs)
-                run db ("UPDATE bibliography SET publisher=? WHERE id=?") [toSql publisher_, toSql h]
-                return ()
-            -- organization
-            case (M.lookup "organization" defs) of
-              Nothing -> return ()
-              Just org->do
-                o<-byName db "organizations" org
-                run db ("UPDATE bibliography SET organization=? WHERE id=?") [toSql o, toSql h]
-                return ()
-            commit db
-            return $ M.insert key h cross
-          _->do { rollback db; return cross }
-        else do
-        --putStrLn $ show key++" already in the base, please delete first"
-        return cross
-    _->do
-      --putStrLn "incomplete doc, not added"
-      --print (key,defs)
-      return cross
-
-insertDB db c k (x,_)=do
-  hPutStrLn stderr $ "Unrecognized entry :"++show x
-  return c
