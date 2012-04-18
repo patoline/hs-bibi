@@ -279,19 +279,19 @@ insertDB db cross key (bibtype,defs)=do
             Nothing -> return ()
             Just c->do
               journal<-byName db "journals" c
-              run db "UPDATE bibliography SET journal=? WHERE id=?" [toSql c, toSql artID]
+              run db "UPDATE bibliography SET journal=? WHERE id=?" [toSql journal, toSql artID]
               return ()
           case M.lookup "school" defs of
             Nothing->return ()
             Just c->do
               school<-institutionid db "school" c
-              run db "UPDATE bibliography SET school=? WHERE id=?" [toSql c, toSql artID]
+              run db "UPDATE bibliography SET school=? WHERE id=?" [toSql school, toSql artID]
               return ()
           case M.lookup "organization" defs of
             Nothing -> return ()
             Just org->do
-              org<-byName db "institutions" org
-              run db ("UPDATE bibliography SET organization=? WHERE id=?") [toSql org, toSql artID]
+              organization<-byName db "institutions" org
+              run db ("UPDATE bibliography SET organization=? WHERE id=?") [toSql organization, toSql artID]
               return ()
           commit db
           return $ M.insert key artID cross
