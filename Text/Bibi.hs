@@ -92,7 +92,7 @@ def names=
             x<-text 1 $ if val1=='{' then '}' else '"';
             return x;
             } <|> do {
-            char '#';
+            do {char '#';return ()}<|>(return ());
             x<-do { y<-many1 $ noneOf "},\"%";spaces';return y };
             case M.lookup x names of {
               Nothing->fail $ "undefined name : "++x;
