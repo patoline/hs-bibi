@@ -1,4 +1,3 @@
-{-# OPTIONS -XPackageImports #-}
 module Text.Bibi(
   -- | Parsing of external formats
   bibtex,
@@ -28,38 +27,81 @@ spaces'=do
       spaces'
       }) <|> (return ())
 
-biblio=
+biblio names=
   (do {
       spaces';char '@';
       itemType<-many1 $ noneOf " \n\t{"; spaces';
-      char '{'; spaces';
-      key<-many1 $ noneOf ",}"; spaces';
-      x<-def; spaces';
-      char '}'; spaces';
-      y<-biblio;
-      return $ M.insert key (map toLower itemType, x) y
+      if map toLower itemType=="string" then do {
+        x<-between (char '{') (char '}') (parseName names);
+        do { char ',';return ()} <|> return ();
+        biblio x
+        } else do {
+        char '{'; spaces';
+        key<-many1 $ noneOf ",}"; spaces';
+        x<-def names; spaces';
+        char '}'; spaces';
+        do { char ',';return ()} <|> return ();
+        y<-biblio names;
+        return $ M.insert key (map toLower itemType, x) y
+        }
       })
   <|> (do {
           eof;
           return M.empty
           })
 
-text c=do
-  x<-(between (char '{') (char '}') (text c)) <|> (many $ noneOf $ c:"{%")
-  (do { char '%'; _<-many $ noneOf "\n"; char '\n'; return ()}) <|> (return ())
-  y<-if null x then return "" else text c
-  return $ x++y
+text 0 _=return ""
+text n c=
+  do {
+    char c;
+    return ""
+    }
+  <|> do {
+    char '"';
+    x<-text (n+1) '"';
+    y<-text n c;
+    return $ x++y
+    }
+  <|> do {
+    char '{';
+    x<-text (n+1) '}';
+    y<-text n c;
+    return $ x++y
+    }
+  <|> do {
+    char '\\';
+    cc<-anyChar;
+    y<-text n c;
+    return $ cc:y
+    }
+  <|> do {
+    x<-many $ noneOf $ c:"\\{\"%";
+    do { char '%'; many $ noneOf "\n"; char '\n'; return ()} <|> (return ());
+    y<-if null x then return "" else text n c;
+    return $ x++y
+    }
 
-def=
+def names=
   (do {
       char ','; spaces';
       (do {
           key<-many1 (noneOf "\n\t%= }"); spaces';
           char '='; spaces';
-          val<-(between (char '{') (char '}') $ text '}') <|>
-               (between (char '"') (char '"') $ text '"') <|>
-               (between (char '\'') (char '\'') $ text '\''); spaces';
-          d<-def;
+          val<-do {
+            val1<-char '{' <|> char '"';
+            x<-text 1 $ if val1=='{' then '}' else '"';
+            return x;
+            } <|> do {
+            char '#';
+            x<-do { y<-many1 $ noneOf "},\"%";spaces';return y };
+            case M.lookup x names of {
+              Nothing->fail $ "undefined name : "++x;
+              Just a->return a }
+            } <|> do {
+            many1 $ noneOf "{\",}"
+            };
+          spaces';
+          d<-def names;
           return $ M.insert (map toLower key) (intercalate " " $ words val) d
           }) <|> (return M.empty)
       })
@@ -67,8 +109,20 @@ def=
   (do {
       return M.empty
       })
+
+parseName names=do
+  key<-many1 (noneOf "\n\t%= }"); spaces';
+  char '='; spaces';
+  val<-many1 $
+       (between (char '"') (char '"') $ many $ noneOf "\"")
+       <|> do { char '#'; k<-many1 $ noneOf "\"}";
+                case M.lookup k names of {
+                  Nothing->fail $ "unknown name "++k;
+                  Just a->return a }}
+  return $ M.insert key (concat val) names
+
 bibtex::FilePath->String->Either ParseError (M.Map String (String,M.Map String String))
-bibtex f str=parse biblio f str
+bibtex f str=parse (biblio M.empty) f str
 
 
 
@@ -236,7 +290,7 @@ insertDB db cross key (bibtype,defs)=do
           case M.lookup "organization" defs of
             Nothing -> return ()
             Just org->do
-              org<-byName db "organizations" org
+              org<-byName db "institutions" org
               run db ("UPDATE bibliography SET organization=? WHERE id=?") [toSql org, toSql artID]
               return ()
           commit db
