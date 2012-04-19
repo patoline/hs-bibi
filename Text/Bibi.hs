@@ -95,7 +95,7 @@ def names=
             do {char '#';return ()}<|>(return ());
             x<-do { y<-many1 $ noneOf "},\"%";spaces';return y };
             case M.lookup x names of {
-              Nothing->fail $ "undefined name : "++x;
+              Nothing-> if all isDigit x then return x else (fail $ "undefined name : "++x);
               Just a->return a }
             } <|> do {
             many1 $ noneOf "{\",}"
