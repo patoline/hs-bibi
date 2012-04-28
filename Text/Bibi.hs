@@ -293,6 +293,14 @@ insertDB db cross key (bibtype,defs)=do
               organization<-byName db "institutions" org
               run db ("UPDATE bibliography SET organization=? WHERE id=?") [toSql organization, toSql artID]
               return ()
+          case M.lookup "crossref" defs of
+            Nothing -> return ()
+            Just key->
+              case M.lookup key cross of
+                Nothing->return ()
+                Just i->do
+                  run db ("UPDATE bibliography SET crossref=? WHERE id=?") [toSql i, toSql artID]
+                  return ()
           commit db
           return $ M.insert key artID cross
     _->do

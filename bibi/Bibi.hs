@@ -38,7 +38,7 @@ main=do
                                 run conn comm []
                                 return ()) create
                       else return ()
-                    let (u,v)=partition (\(k,_)->take 2 k=="in") $ M.toList bib
+                    let (u,v)=partition (\(_,(typ,_))->take 2 typ=="in") $ M.toList bib
                     m<-foldl (\m (k,a)->do
                                  mm<-m
                                  insertDB conn mm k a) (return M.empty) v
