@@ -213,6 +213,7 @@ publisherid db j addr_=do
   case a of
     []->do
       run db ("INSERT INTO publishers (name,address) VALUES (?,?)") [toSql j, toSql addr]
+      commit db
       publisherid db j addr_
     (h0:h1:_):_->do
       addr1<-case safeFromSql h1 of {
@@ -222,7 +223,7 @@ publisherid db j addr_=do
           if addr/=addr0 then putStrLn $ "Conflict in publisher address "++(show (j,addr,addr0)) else return ()
           return $ toSql addr0
         }
-      run db ("INSERT INTO publishers (name,address) VALUES (?,?)") [toSql j, addr1]
+      run db ("UPDATE publishers SET name=?, address=? WHERE id=?") [toSql j, addr1, toSql h0]
       return $ fromSql h0
 
 
@@ -280,6 +281,12 @@ insertDB db cross key (bibtype,defs)=do
             Just c->do
               journal<-byName db "journals" c
               run db "UPDATE bibliography SET journal=? WHERE id=?" [toSql journal, toSql artID]
+              return ()
+          case M.lookup "publisher" defs of
+            Nothing -> return ()
+            Just c->do
+              pub<-publisherid db c $ M.lookup "address" defs
+              run db "UPDATE bibliography SET publisher=? WHERE id=?" [toSql pub, toSql artID]
               return ()
           case M.lookup "school" defs of
             Nothing->return ()
