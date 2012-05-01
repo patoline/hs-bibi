@@ -226,6 +226,10 @@ publisherid db j addr_=do
       run db ("UPDATE publishers SET name=?, address=? WHERE id=?") [toSql j, addr1, toSql h0]
       return $ fromSql h0
 
+readMaybe :: (Read a) => String -> Maybe a
+readMaybe s = case reads s of
+              [(x, "")] -> Just x
+              _ -> Nothing
 
 fillTextFields db _ _ []=return ()
 fillTextFields db ii defs ((x,y):s)=
@@ -235,6 +239,27 @@ fillTextFields db ii defs ((x,y):s)=
       run db ("UPDATE bibliography SET "++y++"=? WHERE id=?") [toSql a, toSql ii]
       fillTextFields db ii defs s
 
+
+splitAuthors auth l=case l of
+  []->
+    case auth of
+      []->[]
+      []:s->reverse $ map reverse s
+      _->reverse $ map reverse auth
+  (c:'a':'n':'d':s)
+    | isSpace c && (case s of { []->False; h:_->isSpace h }) -> splitAuthors ([]:auth) s
+    | otherwise->
+      let auth'=case auth of
+            []->[['d','n','a',c]]
+            h:s->('d':'n':'a':c:h):s
+      in
+       splitAuthors auth' s
+  h:s->
+    splitAuthors (case auth of
+                     []->[[h]]
+                     hh:ss
+                       | isSpace h && null hh->hh:ss
+                       | otherwise -> (h:hh):ss) s
 
 insertDB db cross key (bibtype,defs)=do
   case (M.lookup "title" defs) of
@@ -258,13 +283,12 @@ insertDB db cross key (bibtype,defs)=do
           let artID=fromSql artID_sql::Int
           let authors=case M.lookup "author" defs of
                 Nothing->[]
-                Just a->map (intercalate " ".words) $ splitOn "and" a
+                Just a->map (intercalate " ".words) $ splitAuthors [] a
           run db "DELETE FROM authors_publications WHERE article=?" [toSql artID]
           mapM_ (\(x,y)->do {
                     auth<-byName db "authors" x;
                     run db "INSERT INTO authors_publications (author, article,ordre) VALUES (?,?,?)"
                     [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
-
           let editors=case M.lookup "editor" defs of
                 Nothing->[]
                 Just a->map (intercalate " ".words) $ splitOn "and" a
@@ -275,7 +299,16 @@ insertDB db cross key (bibtype,defs)=do
                     [toSql auth, toSql artID, toSql (y::Int)]}) $ zip editors [0..]
 
           fillTextFields db artID defs [("volume","volume"),("number","number"),("pages","pages"),
-                                        ("doi","doi"),("chapter","chapter")]
+                                        ("doi","doi"),("ee","doi"),("chapter","chapter")]
+          case M.lookup "year" defs >>= readMaybe of
+            Nothing -> return ()
+            Just y -> do
+              let date=
+                    case M.lookup "month" defs >>= readMaybe of
+                      Nothing->show (y::Int)
+                      Just m ->(show (m::Int))++"/"++(show y)
+              run db "UPDATE bibliography SET date=? WHERE id=?" [toSql date, toSql artID]
+              return ()
           case M.lookup "journal" defs of
             Nothing -> return ()
             Just c->do
