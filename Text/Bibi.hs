@@ -223,7 +223,7 @@ publisherid db j addr_=do
           if addr/=addr0 then putStrLn $ "Conflict in publisher address "++(show (j,addr,addr0)) else return ()
           return $ toSql addr0
         }
-      run db ("UPDATE publishers SET name=?, address=? WHERE id=?") [toSql j, addr1, toSql h0]
+      run db ("UPDATE publishers SET name=?, address=? WHERE id=?") [toSql j, addr1, h0]
       return $ fromSql h0
 
 readMaybe :: (Read a) => String -> Maybe a
