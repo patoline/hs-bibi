@@ -12,7 +12,7 @@ source-repository this
         type: darcs
         location: http://www.lama.univ-savoie.fr/~meunier/darcs/bibi
 Library
-        Build-Depends:base, containers, split, HDBC, HDBC-sqlite3, parsec
+        Build-Depends:base, containers, HDBC, HDBC-sqlite3, parsec
         Exposed-Modules:Text.Bibi
 Executable bibi
         Main-is:Bibi.hs
@@ -20,5 +20,5 @@ Executable bibi
         Hs-source-dirs:bibi,.
 Executable biberon
         Main-is:Biberon.hs
-        Build-Depends:directory,filepath,blaze-html, pretty,bytestring,mtl,happstack-server
+        Build-Depends:directory,filepath,blaze-html,pretty,bytestring,mtl,happstack-server
         Hs-source-dirs:bibi,.

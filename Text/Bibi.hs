@@ -12,7 +12,7 @@ import Database.HDBC.Sqlite3
 
 import Data.Char
 import Data.List
-import Data.List.Split
+
 import qualified Data.Map as M
 import System.IO
 
@@ -291,7 +291,7 @@ insertDB db cross key (bibtype,defs)=do
                     [toSql auth, toSql artID, toSql (y::Int)]}) $ zip authors [0..]
           let editors=case M.lookup "editor" defs of
                 Nothing->[]
-                Just a->map (intercalate " ".words) $ splitOn "and" a
+                Just a->map (intercalate " ".words) $ splitAuthors [] a
           run db "DELETE FROM editors_publications WHERE article=?" [toSql artID]
           mapM_ (\(x,y)->do {
                     auth<-byName db "authors" x;
