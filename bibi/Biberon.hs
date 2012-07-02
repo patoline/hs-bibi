@@ -19,7 +19,7 @@ import qualified Data.ByteString.Lazy.Char8 as LB
 
 import Text.PrettyPrint
 
-import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
+import Text.Blaze.Renderer.Utf8 (renderHtml)
 
 import  Text.Blaze.Html5 as H hiding (map)
 import  Text.Blaze.Html5.Attributes as A
