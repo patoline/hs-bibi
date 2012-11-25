@@ -18,7 +18,3 @@ Executable bibi
         Main-is:Bibi.hs
         Build-Depends:directory,filepath
         Hs-source-dirs:bibi,.
-Executable biberon
-        Main-is:Biberon.hs
-        Build-Depends:directory,filepath,blaze-html,pretty,bytestring,mtl,happstack-server
-        Hs-source-dirs:bibi,.
