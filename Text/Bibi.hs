@@ -299,7 +299,7 @@ insertDB db cross key (bibtype,defs)=do
                     [toSql auth, toSql artID, toSql (y::Int)]}) $ zip editors [0..]
 
           fillTextFields db artID defs [("volume","volume"),("number","number"),("pages","pages"),
-                                        ("doi","doi"),("ee","doi"),("chapter","chapter")]
+                                        ("doi","doi"),("ee","eprint"),("chapter","chapter")]
           case M.lookup "year" defs >>= readMaybe of
             Nothing -> return ()
             Just y -> do
