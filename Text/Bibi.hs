@@ -321,11 +321,6 @@ insertDB db cross key (bibtype,defs)=do
             Just c->do
               run db "UPDATE bibliography SET booktitle=? WHERE id=?" [toSql c, toSql artID]
               return ()
-          case M.lookup "key" defs of
-            Nothing -> return ()
-            Just c->do
-              run db "UPDATE bibliography SET key=? WHERE id=?" [toSql c, toSql artID]
-              return ()
           case M.lookup "publisher" defs of
             Nothing -> return ()
             Just c->do
