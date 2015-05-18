@@ -131,6 +131,7 @@ bibtex f str=parse (biblio M.empty) f str
 
 fields=[
   ("id","INTEGER PRIMARY KEY AUTOINCREMENT"),
+  ("key","TEXT"),
   ("booktitle", "TEXT"),
   ("chapter", "TEXT"),
   ("crossref", "INTEGER"),
@@ -338,6 +339,8 @@ insertDB db cross key (bibtype,defs)=do
               organization<-byName db "institutions" org
               run db ("UPDATE bibliography SET organization=? WHERE id=?") [toSql organization, toSql artID]
               return ()
+          run db ("UPDATE bibliography SET key=? WHERE id=?") [toSql key, toSql artID]
+
           case M.lookup "crossref" defs of
             Nothing -> return ()
             Just key->
