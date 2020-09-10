@@ -8,9 +8,9 @@ License:	GPL
 License-file:	LICENSE
 Build-Type:	Simple
 Cabal-Version:	>=1.2
-source-repository this
-        type: darcs
-        location: http://www.lama.univ-savoie.fr/~meunier/darcs/bibi
+source-repository head
+        type: git
+        location: https://github.com/patoline/hs-bibi
 Library
         Build-Depends:base, containers, HDBC, HDBC-sqlite3, parsec
         Exposed-Modules:Text.Bibi
