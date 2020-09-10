@@ -18,3 +18,4 @@ Executable bibi
         Main-is:Bibi.hs
         Build-Depends:directory,filepath
         Hs-source-dirs:bibi,.
+        other-modules:Text.Bibi
