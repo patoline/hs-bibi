@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Text.Bibi(
   -- | Parsing of external formats
   bibtex,
